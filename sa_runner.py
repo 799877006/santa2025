@@ -16,9 +16,9 @@ from shapely.strtree import STRtree
 
 import subprocess
 
-INPUT_FILE = "/kaggle/input/santa2025-optimal-claus/submission.csv"
-OUTPUT_FILE = "/kaggle/working/submission.csv"
-SA_FILE = "/kaggle/working/submission_sa.csv"
+INPUT_FILE = "C:\\kaggle\\submission (6)_sa.csv"
+OUTPUT_FILE = "C:\\kaggle\\submission (6)_sa40.csv"
+SA_FILE = "C:\\kaggle\\submission (6)_sa40.csv"
 
 shutil.copy(INPUT_FILE, SA_FILE)
 shutil.copy(INPUT_FILE, OUTPUT_FILE)
@@ -194,7 +194,7 @@ def apply_sa_results(
     return improved
 
 
-    TREE_POLYGON_POINTS = [
+TREE_POLYGON_POINTS = [
     (0.0,   0.8),
     (0.25/2, 0.5),
     (0.25/4, 0.5),
@@ -304,12 +304,12 @@ def evaluate_submission_all_precise_fast(submission_path: str):
 
 n_min = 5
 n_max = 200
-verbose = "0"
+verbose = "1"
 
-for i in range(5):
+for i in range(40):
     seed = str(i)
     subprocess.run(
-        ["./sa_runner", SA_FILE, SA_FILE,
+        ["C:\\kaggle\\sa_runner.exe", SA_FILE, SA_FILE,
         "200000", "0", "0", seed, verbose, str(n_min), str(n_max)],
         check=True
     )

@@ -1,7 +1,8 @@
-%%writefile sa_runner.cpp
-
 // sa_runner.cpp
 #include <bits/stdc++.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 using namespace std;
 
 using ld = long double;
@@ -441,7 +442,13 @@ int main(int argc, char** argv){
         groups[gid].push_back({item, x, y, deg});
     }
 
-    SplitMix64 rng(seed);
+    int hw_threads = (int)std::thread::hardware_concurrency();
+    if(hw_threads <= 0) hw_threads = 1;
+#ifdef _OPENMP
+    omp_set_num_threads(hw_threads);
+    hw_threads = omp_get_max_threads();
+#endif
+
     auto t_global0 = chrono::steady_clock::now();
 
     // prepare output rows
@@ -452,9 +459,16 @@ int main(int argc, char** argv){
     for (auto &kv : groups) gid_list.push_back(kv.first);
     sort(gid_list.begin(), gid_list.end());
 
-    for(int gid : gid_list){
-        auto &rows0 = groups[gid];
-        auto rows = rows0;
+    struct GroupResult { int gid; vector<Row> rows; bool done=false; };
+    vector<GroupResult> results(gid_list.size());
+    atomic<bool> stop_flag(false);
+
+#pragma omp parallel for schedule(dynamic)
+    for(int idx=0; idx<(int)gid_list.size(); idx++){
+        if(stop_flag.load()) continue;
+        int gid = gid_list[idx];
+
+        auto rows = groups[gid];
         sort(rows.begin(), rows.end(), [](const Row& a, const Row& b){ return a.item < b.item; });
         int n = (int)rows.size();
 
@@ -462,7 +476,10 @@ int main(int argc, char** argv){
 
         if(total_time_sec > 0){
             double eg = chrono::duration<double>(chrono::steady_clock::now()-t_global0).count();
-            if(eg > total_time_sec) break;
+            if(eg > total_time_sec){
+                stop_flag.store(true);
+                continue;
+            }
         }
 
         vector<Tree> init;
@@ -474,15 +491,28 @@ int main(int argc, char** argv){
         vector<Bounds> bs; bs.reserve(n);
         for(auto &t: init) bs.push_back(t.b);
         ld origS = side_len(envelope_from_bounds(bs));
+        (void)origS;
 
-        auto res = run_sa_group(init, max_iter, T_START, T_END, rng, per_group_sec, verbose);
+        uint64_t salt = (uint64_t)gid * 0x9E3779B97F4A7C15ULL;
+#ifdef _OPENMP
+        salt += (uint64_t)omp_get_thread_num();
+#endif
+        SplitMix64 local_rng(seed + salt);
+
+        auto res = run_sa_group(init, max_iter, T_START, T_END, local_rng, per_group_sec, verbose);
 
         vector<Row> new_rows;
         new_rows.reserve(n);
         for(int i=0;i<n;i++){
             new_rows.push_back({rows[i].item, res.best[i].cx, res.best[i].cy, res.best[i].ang_deg});
         }
-        out_groups[gid] = std::move(new_rows);
+        results[idx] = {gid, std::move(new_rows), true};
+    }
+
+    for(size_t i=0;i<results.size();i++){
+        if(results[i].done){
+            out_groups[results[i].gid] = std::move(results[i].rows);
+        }
     }
 
     // write CSV
