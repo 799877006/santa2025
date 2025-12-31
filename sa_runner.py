@@ -16,9 +16,9 @@ from shapely.strtree import STRtree
 
 import subprocess
 
-INPUT_FILE = "C:\\kaggle\\submission (6)_sa.csv"
-OUTPUT_FILE = "C:\\kaggle\\submission (6)_sa40.csv"
-SA_FILE = "C:\\kaggle\\submission (6)_sa40.csv"
+INPUT_FILE = "C:\\kaggle\\70.916.csv"
+OUTPUT_FILE = "C:\\kaggle\\70.916_sa.csv"
+SA_FILE = "C:\\kaggle\\70.916_sa.csv"
 
 shutil.copy(INPUT_FILE, SA_FILE)
 shutil.copy(INPUT_FILE, OUTPUT_FILE)
@@ -142,6 +142,7 @@ def apply_sa_results(
 
     improved = 0
     checked = 0
+    improved_gids = []
 
     for gid, base_g in base.items():
         if gid not in cand:
@@ -175,6 +176,7 @@ def apply_sa_results(
         if ok and better:
             base[gid] = cand_g
             improved += 1
+            improved_gids.append(gid)
 
     rows = []
     for gid in sorted(base.keys(), key=lambda s: int(s)):
@@ -189,7 +191,12 @@ def apply_sa_results(
 
     out_df = pd.DataFrame(rows, columns=["id", "x", "y", "deg"])
     out_df.to_csv(out_csv, index=False)
+    improved_gids_sorted = sorted(improved_gids, key=lambda s: int(s))
     print(f"[py] checked={checked} improved={improved} -> wrote {out_csv}")
+    if improved_gids_sorted:
+        print(f"[py] improved gids: {', '.join(improved_gids_sorted)}")
+    else:
+        print(f"[py] improved gids: none")
 
     return improved
 
@@ -306,7 +313,7 @@ n_min = 5
 n_max = 200
 verbose = "1"
 
-for i in range(40):
+for i in range(50):
     seed = str(i)
     subprocess.run(
         ["C:\\kaggle\\sa_runner.exe", SA_FILE, SA_FILE,
