@@ -1,9 +1,27 @@
 // sa_runner.cpp
-// 编译示例：g++ -O3 -std=c++17 -fopenmp -march=native sa_runner.cpp -o sa_runner.exe
+// 编译示例 (Linux/Windows GCC): g++ -O3 -std=c++17 -fopenmp -march=native sa_runner.cpp -o sa_runner.exe
+// 编译示例 (macOS Apple Clang): brew install libomp
+//                               g++ -O3 -std=c++17 -Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include -L/opt/homebrew/opt/libomp/lib -lomp -march=native sa_runner.cpp -o sa_runner.exe
 // 功能：对每个分组执行模拟退火以最小化包络边长，输入/输出为 CSV。
 // 复杂度概览：单组退火约 O(iters * n)（NV=15 视为常数，碰撞 O(n)）；全部分组为其累加
 // .\sa_runner.exe --dimer "C:\kaggle\70.916_sa.csv" "C:\kaggle\output.csv" 1 8 200
-#include <bits/stdc++.h>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <cmath>
+#include <algorithm>
+#include <chrono>
+#include <random>
+#include <atomic>
+#include <thread>
+#include <unordered_map>
+#include <limits>
+#include <array>
+#include <cstdint>
+#include <cctype>
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -272,8 +290,7 @@ static SAResult run_sa_group(
 
     int iters = small ? max_iterations * 3 : max_iterations; // 小组更多迭代
     ld T0 = small ? t_start * 2.0L : t_start;                // 小组初温更高
-    ld gravity_w = small ? 1e-4L : 1e-6L;                    // 重力惩罚
-    // ld gravity_w = 0.0L;
+    ld gravity_w = small ? 1e-5L : 1e-7L;                    // 微小重力：给离群树一个向心压力
 
     vector<Tree> cur = initial;
     vector<Bounds> cur_bounds(n);
@@ -456,7 +473,7 @@ static SAResult run_sa_group(
             if(delta < 0){
                 accept = true;
             }else if(T > 1e-12L){
-                ld prob = expl(-delta * 1000.0L / T);
+                ld prob = expl(-delta / T);
                 accept = (rng.next01() < prob);
             }
 
@@ -586,13 +603,47 @@ static SAResult run_sa_group(
             // 若邻居不足则退化到单树
         }
 
-        // (C) 单树随机平移/旋转扰动（原逻辑）
-        int idx = rng.randint(0, n-1);
+        // (C) 单树随机平移/旋转扰动
+        int idx;
+        bool is_boundary_tree = false;
+
+        // 增加 30% 的概率专门挑选“边界树”（决定当前包络边长的树）进行优化
+        if (rng.next01() < 0.3) {
+            vector<int> critical;
+            for(int i=0; i<n; i++) {
+                ld margin = curS * 0.01; // 距离边界 1% 以内的树
+                if (fabsl(cur_bounds[i].minx - env.minx) < margin ||
+                    fabsl(cur_bounds[i].miny - env.miny) < margin ||
+                    fabsl(cur_bounds[i].maxx - env.maxx) < margin ||
+                    fabsl(cur_bounds[i].maxy - env.maxy) < margin) {
+                    critical.push_back(i);
+                }
+            }
+            if(!critical.empty()) {
+                idx = critical[rng.randint(0, critical.size()-1)];
+                is_boundary_tree = true;
+            } else {
+                idx = rng.randint(0, n-1);
+            }
+        } else {
+            idx = rng.randint(0, n-1);
+        }
+
         const Tree& orig = cur[idx];
         const Bounds& ob = cur_bounds[idx];
 
-        ld dx = (rng.next01() - 0.5L) * 0.1L * move_scale;
-        ld dy = (rng.next01() - 0.5L) * 0.1L * move_scale;
+        ld dx, dy;
+        if (is_boundary_tree) {
+            // 对于边界树，增加一个向中心 (0,0) 的“向心力”偏置，帮助它们向内收缩
+            ld pull = 0.05L * move_scale;
+            ld bx = (orig.cx > 0 ? -pull : pull);
+            ld by = (orig.cy > 0 ? -pull : pull);
+            dx = bx + (rng.next01() - 0.5L) * 0.1L * move_scale;
+            dy = by + (rng.next01() - 0.5L) * 0.1L * move_scale;
+        } else {
+            dx = (rng.next01() - 0.5L) * 0.1L * move_scale;
+            dy = (rng.next01() - 0.5L) * 0.1L * move_scale;
+        }
         ld dang = (rng.next01() - 0.5L) * rot_scale;
 
         ld ncx = orig.cx + dx;
@@ -944,7 +995,7 @@ int main(int argc, char** argv){
     double total_time_sec = 0.0;
     double per_group_sec = 0.0;
     uint64_t seed = 123456789ULL;
-    const ld T_START = 1.2L;
+    const ld T_START = 2.0L;
     const ld T_END   = 0.001L;
 
     if(dimer_mode){

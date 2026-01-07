@@ -16,9 +16,16 @@ from shapely.strtree import STRtree
 
 import subprocess
 
-INPUT_FILE = "C:\\kaggle\\70.916.csv"
-OUTPUT_FILE = "C:\\kaggle\\70.916_sa.csv"
-SA_FILE = "C:\\kaggle\\70.916_sa.csv"
+import os
+
+INPUT_FILE = "/Users/zbr/code/santa2025/output_boost.csv"
+OUTPUT_FILE = "/Users/zbr/code/santa2025/output_boost_sa.csv"
+SA_FILE = "/Users/zbr/code/santa2025/output_boost_sa.csv"
+
+# 检查文件是否存在，如果不存在则尝试从当前目录寻找
+if not os.path.exists(INPUT_FILE):
+    # 可以在这里添加更灵活的逻辑
+    pass
 
 shutil.copy(INPUT_FILE, SA_FILE)
 shutil.copy(INPUT_FILE, OUTPUT_FILE)
@@ -300,12 +307,16 @@ def evaluate_submission_all_precise_fast(submission_path: str):
 
     per_case_df = pd.DataFrame(results).sort_values("case_id").reset_index(drop=True)
     no_overlap = per_case_df[~per_case_df["has_overlap"]]
-    total_score = float(no_overlap["score"].sum()) if len(no_overlap) > 0 else float("inf")
+    total_score_no_ov = float(no_overlap["score"].sum()) if len(no_overlap) > 0 else float("inf")
+    total_score_all = float(per_case_df["score"].sum())
 
-    print(f"Total score (no-overlap only) = {total_score:.12f}")
+    print(f"Total score (no-overlap only) = {total_score_no_ov:.12f}")
+    print(f"Total score (all cases)        = {total_score_all:.12f}")
     print(f"Overlapped cases = {int(per_case_df['has_overlap'].sum())} / {len(per_case_df)}")
+    if per_case_df["has_overlap"].any():
+        print("Overlapped case IDs:", per_case_df[per_case_df["has_overlap"]]["case_id"].tolist())
 
-    return per_case_df, total_score
+    return per_case_df, total_score_no_ov
 
 
 
@@ -313,11 +324,16 @@ n_min = 5
 n_max = 200
 verbose = "1"
 
-for i in range(50):
+for i in range(20):
     seed = str(i)
+    # 在 Unix/Mac 上通常是 ./sa_runner.exe 或 ./sa_runner
+    exe_path = "./sa_runner.exe"
+    if not os.path.exists(exe_path):
+        exe_path = "./sa_runner"
+
     subprocess.run(
-        ["C:\\kaggle\\sa_runner.exe", SA_FILE, SA_FILE,
-        "200000", "0", "0", seed, verbose, str(n_min), str(n_max)],
+        [exe_path, SA_FILE, SA_FILE,
+        "1000000", "0", "0", seed, verbose, str(n_min), str(n_max)],
         check=True
     )
     apply_sa_results(OUTPUT_FILE, SA_FILE, OUTPUT_FILE, n_min=n_min, n_max=n_max)

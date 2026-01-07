@@ -367,9 +367,9 @@ def run_simulated_annealing(args):
 
 # --- 主流程 ---
 def main():
-    INPUT_CSV = "C:\\kaggle\\finally (5)_round1_spyrrow_final.csv"  # 初始输入
-    OUTPUT_CSV = "C:\\kaggle\\finally (5)_round1_spyrrow_final2.csv"        # 输出
-    LOOP_ROUNDS = 1  # 手动指定循环次数：每轮用上一轮输出作为下一轮输入
+    INPUT_CSV = "/Users/zbr/code/santa2025/best_result.csv"  # 初始输入
+    OUTPUT_CSV = "/Users/zbr/code/santa2025/best_result_sa.csv"        # 输出
+    LOOP_ROUNDS = 20  # 手动指定循环次数：每轮用上一轮输出作为下一轮输入
 
     current_input_csv = INPUT_CSV  # 当前输入文件
 
